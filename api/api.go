@@ -50,15 +50,11 @@ func CommandHandler(command string, args ...string) http.HandlerFunc {
 	pool := stream.New()
 	return func(w http.ResponseWriter, r *http.Request) {
 		slugs := strings.Split(r.URL.Path, "/")
-		fmt.Println(slugs)
 		zargs := make([]string, len(args))
-		fmt.Println("args", args)
 		for i, arg := range args {
-			fmt.Println("prefix", arg, arg[0], arg[0] == '$')
 			if arg[0] == '$' {
 				n, err := strconv.Atoi(strings.TrimPrefix(arg, "$"))
 				if err != nil {
-					fmt.Println("error", err)
 					w.WriteHeader(500)
 					return
 				}
