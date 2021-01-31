@@ -128,6 +128,11 @@ func (r *LongBufferReader) Read(p []byte) (n int, err error) {
 	}
 	bucket := div(r.seek, r.l.size)
 	fmt.Println("bucket", bucket, "seek", r.seek)
+	if bucket == r.l.n_bucket {
+		n = copy(r.l.buffer.Bytes(), p)
+		fmt.Println("from cache", n)
+		return n, nil
+	}
 	f, err := os.Open(r.l.bucketPath(bucket))
 	if err != nil {
 		return n, err
@@ -137,6 +142,7 @@ func (r *LongBufferReader) Read(p []byte) (n int, err error) {
 	if err != nil {
 		return n, err
 	}
+	// FIXME, open/seek/close for each step is violent, add some lazyness
 	n, err = f.Read(p)
 	if err == io.EOF {
 		err = nil // And we don't care!
