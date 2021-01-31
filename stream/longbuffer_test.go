@@ -1,6 +1,9 @@
 package stream
 
 import (
+	"bytes"
+	"fmt"
+	"io"
 	"math/rand"
 	"os"
 	"testing"
@@ -21,4 +24,11 @@ func TestLongBuffer(t *testing.T) {
 		assert.Equal(t, 3*1024*1024, n)
 	}
 	assert.Equal(t, 30*1024*1024, l.Len())
+	l.Close()
+	reader := l.Reader(0)
+	b := new(bytes.Buffer)
+	n, err := io.Copy(b, reader)
+	assert.NoError(t, err)
+	fmt.Println("path", l.path)
+	assert.Equal(t, int64(30*1024*1024), n)
 }
