@@ -10,6 +10,7 @@ import (
 	"os"
 	"path"
 	"sync"
+	"time"
 )
 
 type LongBuffer struct {
@@ -121,6 +122,7 @@ func div(x, y int) int {
 
 func (r *LongBufferReader) Read(p []byte) (n int, err error) {
 	if r.seek > r.l.len {
+		time.Sleep(100 * time.Millisecond)
 		return 0, nil
 	}
 	if r.l.closed && r.seek == r.l.len {
@@ -147,6 +149,11 @@ func (r *LongBufferReader) Read(p []byte) (n int, err error) {
 	if err == io.EOF {
 		err = nil // And we don't care!
 	}
+	if n == 0 {
+		fmt.Println("Waiting")
+		time.Sleep(100 * time.Millisecond)
+	}
+
 	r.seek += n
 	return n, err
 }
