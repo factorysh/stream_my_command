@@ -20,10 +20,10 @@ func TestLongBuffer(t *testing.T) {
 
 	r := rand.New(rand.NewSource(time.Now().Unix()))
 	wg := sync.WaitGroup{}
-	wg.Add(1)
+	wg.Add(2)
 
 	h3 := sha256.New()
-	go func() {
+	go func() { // Slow reader
 		reader := l.Reader(0)
 		b := new(bytes.Buffer)
 		n := 0
@@ -43,6 +43,17 @@ func TestLongBuffer(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, 30*1024*1024, n)
 		h3.Write(b.Bytes())
+		wg.Done()
+	}()
+
+	h4 := sha256.New()
+	go func() {
+		reader := l.Reader(0)
+		b := new(bytes.Buffer)
+		n, err := io.Copy(b, reader)
+		assert.NoError(t, err)
+		assert.Equal(t, int64(30*1024*1024), n)
+		h4.Write(b.Bytes())
 		wg.Done()
 	}()
 
@@ -72,5 +83,6 @@ func TestLongBuffer(t *testing.T) {
 	h2 := sha256.New()
 	h2.Write(b.Bytes())
 	assert.Equal(t, h1.Sum(nil), h2.Sum(nil))
-	//assert.Equal(t, h1.Sum(nil), h3.Sum(nil))
+	assert.Equal(t, h1.Sum(nil), h3.Sum(nil))
+	assert.Equal(t, h1.Sum(nil), h4.Sum(nil))
 }
