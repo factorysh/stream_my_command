@@ -14,10 +14,11 @@ import (
 )
 
 type Command struct {
-	Slug      string
-	Command   string
-	Arguments []string
-	MimeType  string
+	Slug        string
+	Command     string
+	Arguments   []string
+	MimeType    string
+	Environment map[string]string
 }
 
 func Register(server *http.ServeMux, command Command) error {
@@ -27,7 +28,7 @@ func Register(server *http.ServeMux, command Command) error {
 
 	uri := fmt.Sprintf("/api/v1/%s/", command.Slug)
 	fmt.Println("uri", uri)
-	h, err := CommandHandler(command.Command, command.Arguments...)
+	h, err := CommandHandler(command.Environment, command.Command, command.Arguments...)
 	if err != nil {
 		return err
 	}
@@ -35,7 +36,7 @@ func Register(server *http.ServeMux, command Command) error {
 	return nil
 }
 
-func CommandHandler(command string, args ...string) (http.HandlerFunc, error) {
+func CommandHandler(env map[string]string, command string, args ...string) (http.HandlerFunc, error) {
 	pool := _command.NewPool()
 	arguments, err := _command.NewArguments(args)
 	if err != nil {
@@ -74,7 +75,7 @@ func CommandHandler(command string, args ...string) (http.HandlerFunc, error) {
 			w.Header().Add("Stream-Status", "fresh")
 			w.WriteHeader(200)
 			go func() {
-				pool.Command(ctx, longBuffer, nil, command, zargs...)
+				pool.Command(ctx, longBuffer, env, command, zargs...)
 				longBuffer.Close()
 			}()
 		} else {
