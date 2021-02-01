@@ -9,7 +9,7 @@ import (
 
 func main() {
 	mux := http.NewServeMux()
-	api.Register(mux, "nmap", "nmap", "$1")
+	api.Register(mux, "nmap", "nmap", "-A", "-T4", "$1")
 	http.Handle("/", mux)
 	log.Fatal(http.ListenAndServe(":5000", nil))
 }
