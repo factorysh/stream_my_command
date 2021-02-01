@@ -12,7 +12,7 @@ var (
 )
 
 func init() {
-	varargReg = regexp.MustCompile("\\$\\d+")
+	varargReg = regexp.MustCompile("^\\$\\d+$")
 }
 
 type Arguments []Valueable
