@@ -36,13 +36,18 @@ func Register(server *http.ServeMux, command Command) error {
 	return nil
 }
 
+type Run struct {
+	LongBuffer *stream.LongBuffer
+	Cancel     context.CancelFunc
+}
+
 func (c *Command) Handler() (http.HandlerFunc, error) {
 	pool := _command.NewPool()
 	arguments, err := _command.NewArguments(c.Arguments)
 	if err != nil {
 		return nil, err
 	}
-	buffers := make(map[string]*stream.LongBuffer)
+	buffers := make(map[string]*Run)
 	lock := &sync.RWMutex{}
 
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -58,20 +63,27 @@ func (c *Command) Handler() (http.HandlerFunc, error) {
 		k := strings.Join(zargs, "/")
 		var reader io.ReadCloser
 		lock.Lock()
-		longBuffer, ok := buffers[k]
+		run, ok := buffers[k]
 		if !ok {
-			longBuffer, err = stream.NewLongBuffer(os.TempDir())
+			if r.Method != "GET" {
+				w.WriteHeader(http.StatusMethodNotAllowed)
+				lock.Unlock()
+				return
+			}
+			longBuffer, err := stream.NewLongBuffer(os.TempDir())
 			if err != nil {
 				fmt.Println("error", err)
 				w.WriteHeader(500)
 				return
 			}
-			buffers[k] = longBuffer
+			run = &Run{
+				LongBuffer: longBuffer,
+			}
+			buffers[k] = run
 			lock.Unlock()
 			reader = longBuffer.Reader(0)
-
-			ctx, cancel := context.WithCancel(context.TODO())
-			defer cancel()
+			var ctx context.Context
+			ctx, run.Cancel = context.WithCancel(context.TODO())
 			w.Header().Add("Stream-Status", "fresh")
 			w.WriteHeader(200)
 			go func() {
@@ -80,7 +92,12 @@ func (c *Command) Handler() (http.HandlerFunc, error) {
 			}()
 		} else {
 			lock.Unlock()
-			reader = longBuffer.Reader(0)
+			if r.Method == "DELETE" {
+				run.Cancel()
+				w.WriteHeader(200)
+				return
+			}
+			reader = run.LongBuffer.Reader(0)
 			w.Header().Add("Stream-Status", "refurbished")
 			if f, ok := w.(http.Flusher); ok {
 				f.Flush()

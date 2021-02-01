@@ -61,3 +61,8 @@ $ curl -v http://localhost:5000/api/v1/nmap/toto.com
 ```
 
 The header `Stream-Status` says that you've got a second hand answer, and it will follow the main STDOUT stream.
+
+You can kill a running command
+```
+curl -v -X DELETE http://localhost:5000/api/v1/nmap/toto.com
+```
