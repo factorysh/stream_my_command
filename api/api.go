@@ -17,13 +17,13 @@ type Command struct {
 	Slug        string
 	Command     string
 	Arguments   []string
-	MimeType    string
+	ContentType string
 	Environment map[string]string
 }
 
 func Register(server *http.ServeMux, command Command) error {
-	if command.MimeType == "" {
-		command.MimeType = "text/plain"
+	if command.ContentType == "" {
+		command.ContentType = "text/plain"
 	}
 
 	uri := fmt.Sprintf("/api/v1/%s/", command.Slug)
@@ -84,7 +84,8 @@ func (c *Command) Handler() (http.HandlerFunc, error) {
 			reader = longBuffer.Reader(0)
 			var ctx context.Context
 			ctx, run.Cancel = context.WithCancel(context.TODO())
-			w.Header().Add("Stream-Status", "fresh")
+			w.Header().Set("Stream-Status", "fresh")
+			w.Header().Set("Content-Type", c.ContentType)
 			w.WriteHeader(200)
 			go func() {
 				pool.Command(ctx, longBuffer, c.Environment, c.Command, zargs...)
@@ -98,7 +99,8 @@ func (c *Command) Handler() (http.HandlerFunc, error) {
 				return
 			}
 			reader = run.LongBuffer.Reader(0)
-			w.Header().Add("Stream-Status", "refurbished")
+			w.Header().Set("Stream-Status", "refurbished")
+			w.Header().Set("Content-Type", c.ContentType)
 			if f, ok := w.(http.Flusher); ok {
 				f.Flush()
 			}
