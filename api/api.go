@@ -5,9 +5,10 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strconv"
+	"os"
 	"strings"
 
+	_command "github.com/factorysh/stream_my_command/command"
 	"github.com/factorysh/stream_my_command/stream"
 )
 
@@ -26,48 +27,48 @@ func (s *Server) Mux() *http.ServeMux {
 	return s.routes
 }
 
-func (s *Server) Register(name, command string, args ...string) error {
+func Register(server *http.ServeMux, name, command string, args ...string) error {
 	uri := fmt.Sprintf("/api/v1/%s/", name)
 	fmt.Println("uri", uri)
-	s.routes.HandleFunc(uri, CommandHandler(command, args...))
+	h, err := CommandHandler(command, args...)
+	if err != nil {
+		return err
+	}
+	server.HandleFunc(uri, h)
 	return nil
 }
 
-type WC struct {
-	w io.Writer
-}
+func CommandHandler(command string, args ...string) (http.HandlerFunc, error) {
+	pool := _command.NewPool()
+	arguments, err := _command.NewArguments(args)
+	if err != nil {
+		return nil, err
+	}
+	longBuffer, err := stream.NewLongBuffer(os.TempDir())
+	if err != nil {
+		return nil, err
+	}
 
-func (wc *WC) Write(a []byte) (int, error) {
-	return wc.w.Write(a)
-}
-
-func (wc *WC) Close() error {
-	// nope
-	return nil
-}
-
-func CommandHandler(command string, args ...string) http.HandlerFunc {
-	pool := stream.New()
 	return func(w http.ResponseWriter, r *http.Request) {
 		slugs := strings.Split(r.URL.Path, "/")
-		zargs := make([]string, len(args))
-		for i, arg := range args {
-			if arg[0] == '$' {
-				n, err := strconv.Atoi(strings.TrimPrefix(arg, "$"))
-				if err != nil {
-					w.WriteHeader(500)
-					return
-				}
-				zargs[i] = slugs[3+n]
-			} else {
-				zargs[i] = arg
-			}
+		fmt.Println("slugs", slugs)
+		zargs, err := arguments.Values(slugs[4:])
+		if err != nil {
+			fmt.Println("error", err)
+			w.WriteHeader(400)
+			return
 		}
 		fmt.Println("zargs", zargs)
 
 		ctx, cancel := context.WithCancel(context.TODO())
 		defer cancel()
 		w.WriteHeader(200)
-		pool.Command(ctx, &WC{w}, command, zargs...)
-	}
+		reader := longBuffer.Reader(0)
+		go func() {
+			pool.Command(ctx, longBuffer, nil, command, zargs...)
+			longBuffer.Close()
+		}()
+		io.Copy(w, reader)
+
+	}, nil
 }

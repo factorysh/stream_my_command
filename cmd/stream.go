@@ -8,8 +8,8 @@ import (
 )
 
 func main() {
-	s := api.New()
-	s.Register("nmap", "nmap", "$1")
-	http.Handle("/", s.Mux())
+	mux := http.NewServeMux()
+	api.Register(mux, "nmap", "nmap", "$1")
+	http.Handle("/", mux)
 	log.Fatal(http.ListenAndServe(":5000", nil))
 }

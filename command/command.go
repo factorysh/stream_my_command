@@ -13,7 +13,7 @@ type Pool struct {
 	lock sync.RWMutex
 }
 
-func New() *Pool {
+func NewPool() *Pool {
 	return &Pool{
 		lock: sync.RWMutex{},
 	}
