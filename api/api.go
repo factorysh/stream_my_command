@@ -13,25 +13,21 @@ import (
 	"github.com/factorysh/stream_my_command/stream"
 )
 
-type Server struct {
-	routes *http.ServeMux
+type Command struct {
+	Slug      string
+	Command   string
+	Arguments []string
+	MimeType  string
 }
 
-func New() *Server {
-	routes := http.NewServeMux()
-	return &Server{
-		routes: routes,
+func Register(server *http.ServeMux, command Command) error {
+	if command.MimeType == "" {
+		command.MimeType = "text/plain"
 	}
-}
 
-func (s *Server) Mux() *http.ServeMux {
-	return s.routes
-}
-
-func Register(server *http.ServeMux, name, command string, args ...string) error {
-	uri := fmt.Sprintf("/api/v1/%s/", name)
+	uri := fmt.Sprintf("/api/v1/%s/", command.Slug)
 	fmt.Println("uri", uri)
-	h, err := CommandHandler(command, args...)
+	h, err := CommandHandler(command.Command, command.Arguments...)
 	if err != nil {
 		return err
 	}
