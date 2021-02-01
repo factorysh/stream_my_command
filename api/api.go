@@ -28,7 +28,7 @@ func Register(server *http.ServeMux, command Command) error {
 
 	uri := fmt.Sprintf("/api/v1/%s/", command.Slug)
 	fmt.Println("uri", uri)
-	h, err := CommandHandler(command.Environment, command.Command, command.Arguments...)
+	h, err := command.Handler()
 	if err != nil {
 		return err
 	}
@@ -36,9 +36,9 @@ func Register(server *http.ServeMux, command Command) error {
 	return nil
 }
 
-func CommandHandler(env map[string]string, command string, args ...string) (http.HandlerFunc, error) {
+func (c *Command) Handler() (http.HandlerFunc, error) {
 	pool := _command.NewPool()
-	arguments, err := _command.NewArguments(args)
+	arguments, err := _command.NewArguments(c.Arguments)
 	if err != nil {
 		return nil, err
 	}
@@ -75,7 +75,7 @@ func CommandHandler(env map[string]string, command string, args ...string) (http
 			w.Header().Add("Stream-Status", "fresh")
 			w.WriteHeader(200)
 			go func() {
-				pool.Command(ctx, longBuffer, env, command, zargs...)
+				pool.Command(ctx, longBuffer, c.Environment, c.Command, zargs...)
 				longBuffer.Close()
 			}()
 		} else {
