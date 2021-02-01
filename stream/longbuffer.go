@@ -49,6 +49,10 @@ func (l *LongBuffer) ID() uuid.UUID {
 	return l.id
 }
 
+func (l *LongBuffer) Closed() bool {
+	return l.closed
+}
+
 func (l *LongBuffer) newBucket() error {
 	if l.bucket != nil {
 		err := l.bucket.Close()

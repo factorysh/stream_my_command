@@ -97,6 +97,9 @@ func (c *Command) Handler() (http.HandlerFunc, error) {
 				w.WriteHeader(200)
 				return
 			}
+			if run.LongBuffer.Closed() {
+				w.Header().Set("Content-Length", fmt.Sprintf("%d", run.LongBuffer.Len()))
+			}
 			w.Header().Set("Stream-Status", "refurbished")
 			reader = run.LongBuffer.Reader(0)
 		}
