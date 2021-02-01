@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"io"
 	"net/http"
@@ -117,6 +118,7 @@ func (c *Command) Handler() (http.HandlerFunc, error) {
 			}
 			if run.LongBuffer.Closed() {
 				w.Header().Set("Content-Length", fmt.Sprintf("%d", run.LongBuffer.Len()-seek))
+				w.Header().Set("etag", base64.URLEncoding.EncodeToString(run.LongBuffer.Hash()))
 			}
 			w.Header().Set("Stream-Status", "refurbished")
 			reader = run.LongBuffer.Reader(seek)

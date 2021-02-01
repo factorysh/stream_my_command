@@ -2,8 +2,10 @@ package stream
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"errors"
 	"fmt"
+	"hash"
 	"io"
 	"math"
 	"os"
@@ -25,6 +27,7 @@ type LongBuffer struct {
 	n_bucket int
 	closed   bool
 	id       uuid.UUID
+	hash     hash.Hash
 }
 
 func NewLongBuffer(home string) (*LongBuffer, error) {
@@ -40,6 +43,7 @@ func NewLongBuffer(home string) (*LongBuffer, error) {
 		path:   path,
 		size:   10 * 1024 * 1024,
 		id:     id,
+		hash:   sha256.New(),
 	}
 	err = l.newBucket()
 	return l, err
@@ -80,6 +84,7 @@ func (l *LongBuffer) write(chunk []byte) (int, error) {
 	if err != nil {
 		return 0, err
 	}
+	l.hash.Write(chunk)
 	l.len += len(chunk)
 	return l.bucket.Write(chunk)
 }
@@ -93,6 +98,10 @@ func (l *LongBuffer) Close() error {
 	defer l.lock.Unlock()
 	l.closed = true
 	return nil
+}
+
+func (l *LongBuffer) Hash() []byte {
+	return l.hash.Sum(nil)
 }
 
 func (l *LongBuffer) Write(blob []byte) (int, error) {
