@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -62,6 +63,23 @@ func (c *Command) Handler() (http.HandlerFunc, error) {
 		fmt.Println("zargs", zargs)
 		k := strings.Join(zargs, "/")
 		var reader io.ReadCloser
+		seek := 0
+		rangeRaw := r.Header.Get("range")
+		if rangeRaw != "" {
+			rr := strings.Split(rangeRaw, "=")
+			if len(rr) != 2 || rr[0] != "bytes" {
+				w.WriteHeader(400)
+				return
+			}
+			startend := strings.Split(rr[1], "-")
+			seek, err = strconv.Atoi(startend[0])
+			if err != nil {
+				fmt.Println("error", err)
+				w.WriteHeader(400)
+				return
+			}
+			// FIXME handle end range
+		}
 		lock.Lock()
 		run, ok := buffers[k]
 		if !ok {
@@ -81,7 +99,7 @@ func (c *Command) Handler() (http.HandlerFunc, error) {
 			}
 			buffers[k] = run
 			lock.Unlock()
-			reader = longBuffer.Reader(0)
+			reader = longBuffer.Reader(seek)
 			var ctx context.Context
 			ctx, run.Cancel = context.WithCancel(context.TODO())
 			w.Header().Set("Stream-Status", "fresh")
@@ -98,12 +116,13 @@ func (c *Command) Handler() (http.HandlerFunc, error) {
 				return
 			}
 			if run.LongBuffer.Closed() {
-				w.Header().Set("Content-Length", fmt.Sprintf("%d", run.LongBuffer.Len()))
+				w.Header().Set("Content-Length", fmt.Sprintf("%d", run.LongBuffer.Len()-seek))
 			}
 			w.Header().Set("Stream-Status", "refurbished")
-			reader = run.LongBuffer.Reader(0)
+			reader = run.LongBuffer.Reader(seek)
 		}
 		w.Header().Set("Content-Type", c.ContentType)
+		w.Header().Set("Accept-Range", "bytes")
 		w.Header().Set("X-Id", run.LongBuffer.ID().String())
 		if f, ok := w.(http.Flusher); ok {
 			f.Flush()
