@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 
 	_command "github.com/factorysh/stream_my_command/command"
 	"github.com/factorysh/stream_my_command/stream"
@@ -44,10 +45,8 @@ func CommandHandler(command string, args ...string) (http.HandlerFunc, error) {
 	if err != nil {
 		return nil, err
 	}
-	longBuffer, err := stream.NewLongBuffer(os.TempDir())
-	if err != nil {
-		return nil, err
-	}
+	buffers := make(map[string]*stream.LongBuffer)
+	lock := &sync.RWMutex{}
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		slugs := strings.Split(r.URL.Path, "/")
@@ -59,15 +58,38 @@ func CommandHandler(command string, args ...string) (http.HandlerFunc, error) {
 			return
 		}
 		fmt.Println("zargs", zargs)
+		k := strings.Join(zargs, "/")
+		var reader io.ReadCloser
+		lock.Lock()
+		longBuffer, ok := buffers[k]
+		if !ok {
+			longBuffer, err = stream.NewLongBuffer(os.TempDir())
+			if err != nil {
+				fmt.Println("error", err)
+				w.WriteHeader(400)
+				return
+			}
+			buffers[k] = longBuffer
+			lock.Unlock()
+			reader = longBuffer.Reader(0)
 
-		ctx, cancel := context.WithCancel(context.TODO())
-		defer cancel()
-		w.WriteHeader(200)
-		reader := longBuffer.Reader(0)
-		go func() {
-			pool.Command(ctx, longBuffer, nil, command, zargs...)
-			longBuffer.Close()
-		}()
+			ctx, cancel := context.WithCancel(context.TODO())
+			defer cancel()
+			w.Header().Add("Stream-Status", "fresh")
+			w.WriteHeader(200)
+			go func() {
+				pool.Command(ctx, longBuffer, nil, command, zargs...)
+				longBuffer.Close()
+			}()
+		} else {
+			lock.Unlock()
+			reader = longBuffer.Reader(0)
+			w.Header().Add("Stream-Status", "refurbished")
+			if f, ok := w.(http.Flusher); ok {
+				f.Flush()
+			}
+			w.WriteHeader(200)
+		}
 		io.Copy(w, reader)
 
 	}, nil
