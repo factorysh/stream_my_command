@@ -27,9 +27,11 @@ func (p *Pool) Command(ctx context.Context, out io.WriteCloser, env map[string]s
 	cmd.Stdout = out
 	cmd.Stderr = os.Stderr
 	envs := make([]string, 0)
-	for k, v := range env {
-		// FIXME assert k ~=[a-zA-Z_][a-zA-Z_0-9]+
-		envs = append(envs, fmt.Sprintf("%s=%s", k, v))
+	if env != nil {
+		for k, v := range env {
+			// FIXME assert k ~=[a-zA-Z_][a-zA-Z_0-9]+
+			envs = append(envs, fmt.Sprintf("%s=%s", k, v))
+		}
 	}
 	cmd.Env = envs
 	err := cmd.Start()
