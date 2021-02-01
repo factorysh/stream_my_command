@@ -3,6 +3,7 @@ build: bin
 
 test:
 	go test -v -timeout 30s \
+		github.com/factorysh/stream_my_command/command \
 		github.com/factorysh/stream_my_command/stream
 
 bin:
