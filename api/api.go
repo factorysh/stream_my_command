@@ -63,7 +63,7 @@ func (c *Command) Handler() (http.HandlerFunc, error) {
 			longBuffer, err = stream.NewLongBuffer(os.TempDir())
 			if err != nil {
 				fmt.Println("error", err)
-				w.WriteHeader(400)
+				w.WriteHeader(500)
 				return
 			}
 			buffers[k] = longBuffer
