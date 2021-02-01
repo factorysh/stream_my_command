@@ -93,6 +93,7 @@ func (c *Command) Handler() (http.HandlerFunc, error) {
 			lock.Unlock()
 			if r.Method == "DELETE" {
 				run.Cancel()
+				w.Header().Set("X-Id", run.LongBuffer.ID().String())
 				w.WriteHeader(200)
 				return
 			}
@@ -100,6 +101,7 @@ func (c *Command) Handler() (http.HandlerFunc, error) {
 			reader = run.LongBuffer.Reader(0)
 		}
 		w.Header().Set("Content-Type", c.ContentType)
+		w.Header().Set("X-Id", run.LongBuffer.ID().String())
 		if f, ok := w.(http.Flusher); ok {
 			f.Flush()
 		}

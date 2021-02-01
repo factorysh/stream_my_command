@@ -5,12 +5,14 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"math"
 	"os"
 	"path"
+	_path "path"
 	"sync"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 type LongBuffer struct {
@@ -22,10 +24,13 @@ type LongBuffer struct {
 	bucket   *os.File
 	n_bucket int
 	closed   bool
+	id       uuid.UUID
 }
 
 func NewLongBuffer(home string) (*LongBuffer, error) {
-	path, err := ioutil.TempDir(home, "lb-")
+	id := uuid.New()
+	path := _path.Join(home, fmt.Sprintf("lb-%s", id.String()))
+	err := os.Mkdir(path, 0700)
 	if err != nil {
 		return nil, err
 	}
@@ -34,9 +39,14 @@ func NewLongBuffer(home string) (*LongBuffer, error) {
 		lock:   &sync.RWMutex{},
 		path:   path,
 		size:   10 * 1024 * 1024,
+		id:     id,
 	}
 	err = l.newBucket()
 	return l, err
+}
+
+func (l *LongBuffer) ID() uuid.UUID {
+	return l.id
 }
 
 func (l *LongBuffer) newBucket() error {
