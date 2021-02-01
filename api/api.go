@@ -85,8 +85,6 @@ func (c *Command) Handler() (http.HandlerFunc, error) {
 			var ctx context.Context
 			ctx, run.Cancel = context.WithCancel(context.TODO())
 			w.Header().Set("Stream-Status", "fresh")
-			w.Header().Set("Content-Type", c.ContentType)
-			w.WriteHeader(200)
 			go func() {
 				pool.Command(ctx, longBuffer, c.Environment, c.Command, zargs...)
 				longBuffer.Close()
@@ -98,15 +96,14 @@ func (c *Command) Handler() (http.HandlerFunc, error) {
 				w.WriteHeader(200)
 				return
 			}
-			reader = run.LongBuffer.Reader(0)
 			w.Header().Set("Stream-Status", "refurbished")
-			w.Header().Set("Content-Type", c.ContentType)
-			if f, ok := w.(http.Flusher); ok {
-				f.Flush()
-			}
-			w.WriteHeader(200)
+			reader = run.LongBuffer.Reader(0)
 		}
+		w.Header().Set("Content-Type", c.ContentType)
+		if f, ok := w.(http.Flusher); ok {
+			f.Flush()
+		}
+		w.WriteHeader(200)
 		io.Copy(w, reader)
-
 	}, nil
 }
