@@ -19,7 +19,8 @@ func main() {
 	api.Register(mux, api.Command{
 		Slug:      "nmap",
 		Command:   "nmap",
-		Arguments: []string{"-A", "-T4", "$1"},
+		Arguments:   []string{"-A", "-T4", "-oX", "-", "$1"},
+		ContentType: "application/xml",
 	})
 	http.Handle("/", mux)
 	log.Fatal(http.ListenAndServe(":5000", nil))
