@@ -127,23 +127,24 @@ func TestLongBuffer(t *testing.T) {
 
 func TestSeek(t *testing.T) {
 	l, err := NewLongBuffer(os.TempDir())
+	l.size = 1024
 	assert.NoError(t, err)
 	r := rand.New(rand.NewSource(time.Now().Unix()))
-	buff := make([]byte, 3*1024*1024)
+	buff := make([]byte, 3*1024)
 	start := new(bytes.Buffer)
-	SEEK := 5 * 1024 * 1024
+	SEEK := 5 * 1024
 	for i := 0; i < 10; i++ {
 		_, _ = r.Read(buff)
 		n, err := l.Write(buff)
 		assert.NoError(t, err)
-		assert.Equal(t, 3*1024*1024, n)
+		assert.Equal(t, 3*1024, n)
 		if start.Len() < SEEK {
 			start.Write(buff)
 		}
 		fmt.Println("Write", i)
 		time.Sleep(time.Duration(r.Int63n(10)) * time.Millisecond)
 	}
-	assert.Equal(t, 30*1024*1024, l.Len())
+	assert.Equal(t, 30*1024, l.Len())
 	l.Close()
 	reader := l.Reader(SEEK)
 	defer reader.Close()
