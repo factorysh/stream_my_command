@@ -2,7 +2,6 @@ package rfc7233
 
 import (
 	"fmt"
-	"io"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -23,24 +22,17 @@ func TestNext(t *testing.T) {
 		values[i] = i
 	}
 	stack := make([]int, 0)
-	for true {
-		start, end, infinite, err := r.Next()
-		if err != nil {
-			if err != io.EOF {
-				assert.NoError(t, err)
-			}
-			break
-		}
+	for r.Next() == nil {
+		start, end, infinite := r.Values()
 		var sub []int
 		if infinite {
 			sub = values[start:]
 		} else {
-			sub = values[start : end+1]
+			sub = values[start:end]
 		}
 		for _, v := range sub {
 			stack = append(stack, v)
 		}
 	}
 	assert.Equal(t, []int{1, 2, 3, 5, 6, 7, 8, 9}, stack)
-
 }

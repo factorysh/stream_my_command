@@ -68,11 +68,16 @@ func (r *Ranges) Len() int {
 	return len(r.ranges)
 }
 
-func (r *Ranges) Next() (start, end int, infinite bool, err error) {
+func (r *Ranges) Next() error {
 	if r.r == len(r.ranges) {
-		return 0, 0, false, io.EOF
+		return io.EOF
 	}
-	rr := r.ranges[r.r]
+	r.r++
+	return nil
+}
+
+func (r *Ranges) Values() (start, end int, infinite bool) {
+	rr := r.ranges[r.r-1]
 	if !rr.start {
 		start = 0
 	} else {
@@ -83,6 +88,5 @@ func (r *Ranges) Next() (start, end int, infinite bool, err error) {
 	} else {
 		end = rr.max
 	}
-	r.r++
-	return start, end, infinite, nil
+	return start, end + 1, infinite
 }
