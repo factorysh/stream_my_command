@@ -148,6 +148,9 @@ func div(x, y int) int {
 
 func (r *LongBufferReader) Read(p []byte) (n int, err error) {
 	if r.seek > r.l.len {
+		if r.l.closed {
+			return 0, fmt.Errorf("outside %d %d", r.seek, r.l.len)
+		}
 		time.Sleep(100 * time.Millisecond)
 		return 0, nil
 	}
