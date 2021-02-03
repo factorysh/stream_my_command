@@ -86,3 +86,37 @@ func TestLongBuffer(t *testing.T) {
 	assert.Equal(t, h1.Sum(nil), h3.Sum(nil))
 	assert.Equal(t, h1.Sum(nil), h4.Sum(nil))
 }
+
+func TestSeek(t *testing.T) {
+	l, err := NewLongBuffer(os.TempDir())
+	assert.NoError(t, err)
+	r := rand.New(rand.NewSource(time.Now().Unix()))
+	buff := make([]byte, 3*1024*1024)
+	start := new(bytes.Buffer)
+	SEEK := 5 * 1024 * 1024
+	for i := 0; i < 10; i++ {
+		_, _ = r.Read(buff)
+		n, err := l.Write(buff)
+		assert.NoError(t, err)
+		assert.Equal(t, 3*1024*1024, n)
+		if start.Len() < SEEK {
+			start.Write(buff)
+		}
+		fmt.Println("Write", i)
+		time.Sleep(time.Duration(r.Int63n(10)) * time.Millisecond)
+	}
+	assert.Equal(t, 30*1024*1024, l.Len())
+	l.Close()
+	reader := l.Reader(SEEK)
+	defer reader.Close()
+
+	h := sha256.New()
+	n, err := h.Write(start.Bytes()[:SEEK])
+	assert.NoError(t, err)
+	assert.Equal(t, n, SEEK)
+	w, err := io.Copy(h, reader)
+	assert.NoError(t, err)
+	assert.Equal(t, w, int64(l.Len()-SEEK))
+	assert.Equal(t, l.Hash(), h.Sum(nil))
+
+}
