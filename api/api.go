@@ -43,6 +43,21 @@ type Run struct {
 	Cancel     context.CancelFunc
 }
 
+func simpleStartRange(rangeRaw string) (int, error) {
+	rr := strings.Split(rangeRaw, "=")
+	if len(rr) != 2 || rr[0] != "bytes" {
+		return 0, fmt.Errorf("Not bytes : %s", rangeRaw)
+	}
+	startend := strings.Split(rr[1], "-")
+	seek, err := strconv.Atoi(startend[0])
+	if err != nil {
+		fmt.Println("error", err)
+		return 0, fmt.Errorf("Bof")
+	}
+	// FIXME handle end range
+	return seek, nil
+}
+
 func (c *Command) Handler() (http.HandlerFunc, error) {
 	pool := _command.NewPool()
 	arguments, err := _command.NewArguments(c.Arguments)
@@ -67,19 +82,11 @@ func (c *Command) Handler() (http.HandlerFunc, error) {
 		seek := 0
 		rangeRaw := r.Header.Get("range")
 		if rangeRaw != "" {
-			rr := strings.Split(rangeRaw, "=")
-			if len(rr) != 2 || rr[0] != "bytes" {
-				w.WriteHeader(400)
-				return
-			}
-			startend := strings.Split(rr[1], "-")
-			seek, err = strconv.Atoi(startend[0])
+			seek, err = simpleStartRange(rangeRaw)
 			if err != nil {
-				fmt.Println("error", err)
 				w.WriteHeader(400)
 				return
 			}
-			// FIXME handle end range
 		}
 		lock.Lock()
 		run, ok := buffers[k]
