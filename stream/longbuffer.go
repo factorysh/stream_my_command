@@ -162,6 +162,7 @@ func (r *LongBufferReader) Read(p []byte) (n int, err error) {
 	if bucket == r.l.n_bucket {
 		n = copy(r.l.buffer.Bytes(), p)
 		fmt.Println("from cache", n)
+		r.seek += n
 		return n, nil
 	}
 	f, err := os.Open(r.l.bucketPath(bucket))
