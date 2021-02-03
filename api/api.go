@@ -123,6 +123,10 @@ func (c *Command) Handler() (http.HandlerFunc, error) {
 				w.WriteHeader(200)
 				return
 			}
+			if r.Method != "GET" {
+				w.WriteHeader(http.StatusMethodNotAllowed)
+				return
+			}
 			if run.LongBuffer.Closed() {
 				w.Header().Set("Content-Length", fmt.Sprintf("%d", run.LongBuffer.Len()-seek))
 				w.Header().Set("etag", hex.EncodeToString(run.LongBuffer.Hash()))
@@ -136,7 +140,6 @@ func (c *Command) Handler() (http.HandlerFunc, error) {
 		if f, ok := w.(http.Flusher); ok {
 			f.Flush()
 		}
-		w.WriteHeader(200)
 		io.Copy(w, reader)
 	}, nil
 }
