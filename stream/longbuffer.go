@@ -140,6 +140,9 @@ type LongBufferReader struct {
 }
 
 func div(x, y int) int {
+	if x < y { // Early optimization
+		return 0
+	}
 	return int(math.Floor(float64(x) / float64(y)))
 }
 
