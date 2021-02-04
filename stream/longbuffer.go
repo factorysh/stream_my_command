@@ -86,7 +86,11 @@ func (l *LongBuffer) write(chunk []byte) (int, error) {
 	}
 	l.hash.Write(chunk)
 	l.len += len(chunk)
-	return l.bucket.Write(chunk)
+	n, err := l.bucket.Write(chunk)
+	if n != len(chunk) {
+		return 0, fmt.Errorf("Wrong write %d != %d", n, len(chunk))
+	}
+	return n, err
 }
 
 func (l *LongBuffer) Len() int {
@@ -96,6 +100,10 @@ func (l *LongBuffer) Len() int {
 func (l *LongBuffer) Close() error {
 	l.lock.Lock()
 	defer l.lock.Unlock()
+	err := l.bucket.Close()
+	if err != nil {
+		return err
+	}
 	l.closed = true
 	return nil
 }
