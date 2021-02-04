@@ -167,8 +167,9 @@ func (r *LongBufferReader) Read(p []byte) (n int, err error) {
 	}
 	bucket := div(r.seek, r.l.size)
 	fmt.Println("seek", r.seek, "bucket", bucket, "/", r.l.n_bucket, r.seek-bucket*r.l.size)
-	if bucket+1 == r.l.n_bucket {
-		n = copy(r.l.buffer.Bytes(), p)
+	//if !r.l.closed && bucket+1 == r.l.n_bucket {
+	if bucket == r.l.n_bucket {
+		n = copy(r.l.buffer.Bytes()[r.seek-bucket*r.l.size:], p)
 		fmt.Println("from cache", n)
 		r.seek += n
 		return n, nil
