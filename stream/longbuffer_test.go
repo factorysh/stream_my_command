@@ -120,9 +120,10 @@ func TestLongBuffer(t *testing.T) {
 	assert.Equal(t, int64(30*1024*1024), n)
 	h2 := sha256.New()
 	h2.Write(b.Bytes())
-	assert.Equal(t, h1.Sum(nil), h2.Sum(nil))
-	assert.Equal(t, h1.Sum(nil), h3.Sum(nil))
-	assert.Equal(t, h1.Sum(nil), h4.Sum(nil))
+	assert.Equal(t, l.Hash(), h1.Sum(nil))
+	assert.Equal(t, l.Hash(), h2.Sum(nil))
+	assert.Equal(t, l.Hash(), h3.Sum(nil))
+	assert.Equal(t, l.Hash(), h4.Sum(nil))
 }
 
 func TestSeek(t *testing.T) {
