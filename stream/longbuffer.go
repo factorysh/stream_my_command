@@ -63,6 +63,12 @@ func (l *LongBuffer) newBucket() error {
 		if err != nil {
 			return err
 		}
+		/*
+			err = l.bucket.Chmod(0400)
+			if err != nil {
+				return err
+			}
+		*/
 	}
 	f, err := os.OpenFile(l.bucketPath(l.n_bucket),
 		os.O_CREATE+os.O_APPEND+os.O_WRONLY, 0600)
