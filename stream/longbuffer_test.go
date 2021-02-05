@@ -73,21 +73,22 @@ func TestReadWhileWrite(t *testing.T) {
 		time.Sleep(time.Duration(r.Int63n(10)) * time.Millisecond)
 	}
 	wg := &sync.WaitGroup{}
-	wg.Add(1)
 
-	go func() {
-		reader := l.Reader(0)
-		b := new(bytes.Buffer)
-		n, err := io.Copy(b, reader)
-		assert.NoError(t, err)
-		fmt.Println("path", l.path)
-		assert.Equal(t, int64(30*1024*1024+512), n)
-		h2 := sha256.New()
-		h2.Write(b.Bytes())
-		assert.Equal(t, h1.Sum(nil), l.Hash())
-		wg.Done()
-	}()
-
+	for i := 0; i < 20; i++ {
+		wg.Add(1)
+		go func() {
+			reader := l.Reader(0)
+			b := new(bytes.Buffer)
+			n, err := io.Copy(b, reader)
+			assert.NoError(t, err)
+			fmt.Println("path", l.path)
+			assert.Equal(t, int64(30*1024*1024+512), n)
+			h2 := sha256.New()
+			h2.Write(b.Bytes())
+			assert.Equal(t, h1.Sum(nil), l.Hash())
+			wg.Done()
+		}()
+	}
 	time.Sleep(10 * time.Millisecond)
 
 	go func() {
