@@ -40,7 +40,8 @@ func TestSimple(t *testing.T) {
 	assert.Equal(t, 512, w)
 
 	assert.Equal(t, 30*1024*1024+512, l.Len())
-	l.Close()
+	err = l.Close()
+	assert.NoError(t, err)
 	reader := l.Reader(0)
 	b := new(bytes.Buffer)
 	n, err := io.Copy(b, reader)
