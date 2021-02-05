@@ -113,7 +113,8 @@ func (l *LongBuffer) Close() error {
 		return err
 	}
 	l.closed = true
-	return nil
+	l.buffer = nil
+	return l.bucket.Chmod(0400)
 }
 
 func (l *LongBuffer) Hash() []byte {
