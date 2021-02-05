@@ -124,6 +124,7 @@ func (l *LongBuffer) Hash() []byte {
 }
 
 func (l *LongBuffer) Write(blob []byte) (int, error) {
+	slice := blob[:]
 	l.lock.Lock()
 	defer l.lock.Unlock()
 	if l.closed {
@@ -132,25 +133,25 @@ func (l *LongBuffer) Write(blob []byte) (int, error) {
 	size := 0
 	for {
 		cSize := l.size - l.buffer.Len()
-		if len(blob) < cSize {
-			n, err := l.write(blob)
+		if len(slice) < cSize {
+			n, err := l.write(slice)
 			if err != nil {
-				return 0, err
+				return size + n, err
 			}
 			return size + n, nil
 		}
-		_, err := l.write(blob[:cSize])
+		n, err := l.write(slice[:cSize])
 		if err != nil {
-			return 0, err
+			return size + n, err
 		}
 		err = l.newBucket()
 		if err != nil {
-			return 0, err
+			return size, err
 		}
-		blob = blob[cSize:]
+		slice = slice[cSize:]
 		size += cSize
 	}
-	return 0, nil
+	return 0, nil // the return is not here
 }
 
 type LongBufferReader struct {
