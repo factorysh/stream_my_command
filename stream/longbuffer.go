@@ -122,16 +122,23 @@ func (l *LongBuffer) Hash() []byte {
 }
 
 func (l *LongBuffer) Write(blob []byte) (int, error) {
-	slice := blob[:]
 	l.lock.Lock()
 	defer l.lock.Unlock()
 	if l.closed {
 		return 0, errors.New("Closed buffer")
 	}
+	slice := blob[:]
 	size := 0
 	for {
-		cSize := l.size - l.buffer.Len()
-		if len(slice) < cSize {
+		cSize := l.size - l.buffer.Len() // empty space in the buffer
+		if cSize == 0 {                  // buffer is full, lets add a new one
+			err := l.newBucket()
+			if err != nil {
+				return size, err
+			}
+			cSize = l.size
+		}
+		if len(slice) < cSize { // there is enough space
 			n, err := l.write(slice)
 			if err != nil {
 				return size + n, err
@@ -141,10 +148,6 @@ func (l *LongBuffer) Write(blob []byte) (int, error) {
 		n, err := l.write(slice[:cSize])
 		if err != nil {
 			return size + n, err
-		}
-		err = l.newBucket()
-		if err != nil {
-			return size, err
 		}
 		slice = slice[cSize:]
 		size += cSize
