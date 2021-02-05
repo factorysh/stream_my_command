@@ -59,16 +59,14 @@ func (l *LongBuffer) Closed() bool {
 
 func (l *LongBuffer) newBucket() error {
 	if l.bucket != nil {
-		err := l.bucket.Close()
+		err := l.bucket.Chmod(0400)
 		if err != nil {
 			return err
 		}
-		/*
-			err = l.bucket.Chmod(0400)
-			if err != nil {
-				return err
-			}
-		*/
+		err = l.bucket.Close()
+		if err != nil {
+			return err
+		}
 	}
 	f, err := os.OpenFile(l.bucketPath(l.n_bucket),
 		os.O_CREATE+os.O_APPEND+os.O_WRONLY, 0600)
@@ -108,13 +106,13 @@ func (l *LongBuffer) Len() int {
 func (l *LongBuffer) Close() error {
 	l.lock.Lock()
 	defer l.lock.Unlock()
-	err := l.bucket.Close()
+	err := l.bucket.Chmod(0400)
 	if err != nil {
 		return err
 	}
-	l.closed = true
 	l.buffer = nil
-	return l.bucket.Chmod(0400)
+	l.closed = true
+	return l.bucket.Close()
 }
 
 func (l *LongBuffer) Hash() []byte {
