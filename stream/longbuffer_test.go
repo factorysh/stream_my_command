@@ -17,6 +17,7 @@ import (
 func TestSimple(t *testing.T) {
 	l, err := NewLongBuffer(os.TempDir())
 	assert.NoError(t, err)
+	assert.NotEmpty(t, l.ID())
 
 	r := rand.New(rand.NewSource(time.Now().Unix()))
 	buff := make([]byte, 3*1024*1024)
@@ -42,6 +43,7 @@ func TestSimple(t *testing.T) {
 	assert.Equal(t, 30*1024*1024+512, l.Len())
 	err = l.Close()
 	assert.NoError(t, err)
+	assert.True(t, l.Closed())
 	reader := l.Reader(0)
 	b := new(bytes.Buffer)
 	n, err := io.Copy(b, reader)
