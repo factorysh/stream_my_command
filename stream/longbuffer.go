@@ -100,6 +100,8 @@ func (l *LongBuffer) write(chunk []byte) (int, error) {
 }
 
 func (l *LongBuffer) Len() int {
+	l.lock.RLock()
+	defer l.lock.RUnlock()
 	return l.len
 }
 
@@ -115,6 +117,8 @@ func (l *LongBuffer) Close() error {
 }
 
 func (l *LongBuffer) Hash() []byte {
+	l.lock.RLock()
+	defer l.lock.RUnlock()
 	return l.hash.Sum(nil)
 }
 
@@ -161,6 +165,8 @@ func div(x, y int) int {
 }
 
 func (r *LongBufferReader) Read(p []byte) (n int, err error) {
+	r.l.lock.RLock()
+	defer r.l.lock.RUnlock()
 	if r.seek > r.l.len {
 		if r.l.closed {
 			return 0, fmt.Errorf("outside %d %d", r.seek, r.l.len)
