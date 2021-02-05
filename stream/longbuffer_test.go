@@ -55,6 +55,79 @@ func TestSimple(t *testing.T) {
 	assert.Equal(t, h1.Sum(nil), l.Hash())
 }
 
+func TestReadWhileWrite(t *testing.T) {
+	l, err := NewLongBuffer(os.TempDir())
+	assert.NoError(t, err)
+
+	r := rand.New(rand.NewSource(time.Now().Unix()))
+	buff := make([]byte, 3*1024*1024)
+	h1 := sha256.New()
+	for i := 0; i < 5; i++ {
+		_, _ = r.Read(buff)
+		n, err := l.Write(buff)
+		assert.NoError(t, err)
+		_, err = h1.Write(buff)
+		assert.NoError(t, err)
+		assert.Equal(t, 3*1024*1024, n)
+		fmt.Println("Write", i)
+		time.Sleep(time.Duration(r.Int63n(10)) * time.Millisecond)
+	}
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
+
+	go func() {
+		reader := l.Reader(0)
+		b := new(bytes.Buffer)
+		n, err := io.Copy(b, reader)
+		assert.NoError(t, err)
+		fmt.Println("path", l.path)
+		assert.Equal(t, int64(30*1024*1024+512), n)
+		h2 := sha256.New()
+		h2.Write(b.Bytes())
+		assert.Equal(t, h1.Sum(nil), l.Hash())
+		wg.Done()
+	}()
+
+	time.Sleep(10 * time.Millisecond)
+
+	go func() {
+		for i := 0; i < 5; i++ {
+			_, _ = r.Read(buff)
+			_, err := l.Write(buff)
+			assert.NoError(t, err)
+			_, err = h1.Write(buff)
+			assert.NoError(t, err)
+			fmt.Println("Write", i)
+			time.Sleep(time.Duration(r.Int63n(10)) * time.Millisecond)
+		}
+
+		buff = make([]byte, 512)
+		_, _ = r.Read(buff)
+		w, err := l.Write(buff)
+		assert.NoError(t, err)
+		_, err = h1.Write(buff)
+		assert.NoError(t, err)
+		assert.Equal(t, 512, w)
+
+		assert.Equal(t, 30*1024*1024+512, l.Len())
+		err = l.Close()
+		assert.NoError(t, err)
+	}()
+
+	wg.Wait()
+
+	// Read a finished lb
+	reader := l.Reader(0)
+	b := new(bytes.Buffer)
+	n, err := io.Copy(b, reader)
+	assert.NoError(t, err)
+	fmt.Println("path", l.path)
+	assert.Equal(t, int64(30*1024*1024+512), n)
+	h2 := sha256.New()
+	h2.Write(b.Bytes())
+	assert.Equal(t, h1.Sum(nil), l.Hash())
+}
+
 func TestLongBuffer(t *testing.T) {
 	l, err := NewLongBuffer(os.TempDir())
 	assert.NoError(t, err)
