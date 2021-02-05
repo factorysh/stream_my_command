@@ -7,12 +7,9 @@ import (
 	"fmt"
 	"hash"
 	"io"
-	"math"
 	"os"
-	"path"
 	_path "path"
 	"sync"
-	"time"
 
 	"github.com/google/uuid"
 )
@@ -23,11 +20,12 @@ type LongBuffer struct {
 	path     string
 	size     int
 	len      int
-	bucket   *os.File
+	bucket   *Bucket
 	n_bucket int
 	closed   bool
 	id       uuid.UUID
 	hash     hash.Hash
+	writer   io.Writer
 }
 
 func NewLongBuffer(home string) (*LongBuffer, error) {
@@ -37,16 +35,21 @@ func NewLongBuffer(home string) (*LongBuffer, error) {
 	if err != nil {
 		return nil, err
 	}
-	l := &LongBuffer{
-		buffer: &bytes.Buffer{},
-		lock:   &sync.RWMutex{},
-		path:   path,
-		size:   10 * 1024 * 1024,
-		id:     id,
-		hash:   sha256.New(),
+	size := 10 * 1024 * 1024
+	b, err := NewBucket(path, size)
+	if err != nil {
+		return nil, err
 	}
-	err = l.newBucket()
-	return l, err
+	h := sha256.New()
+	return &LongBuffer{
+		path:   path,
+		lock:   &sync.RWMutex{},
+		bucket: b,
+		id:     id,
+		hash:   h,
+		size:   size,
+		writer: io.MultiWriter(b, h),
+	}, err
 }
 
 func (l *LongBuffer) ID() uuid.UUID {
@@ -55,46 +58,6 @@ func (l *LongBuffer) ID() uuid.UUID {
 
 func (l *LongBuffer) Closed() bool {
 	return l.closed
-}
-
-func (l *LongBuffer) newBucket() error {
-	if l.bucket != nil {
-		err := l.bucket.Chmod(0400)
-		if err != nil {
-			return err
-		}
-		err = l.bucket.Close()
-		if err != nil {
-			return err
-		}
-	}
-	f, err := os.OpenFile(l.bucketPath(l.n_bucket),
-		os.O_CREATE+os.O_APPEND+os.O_WRONLY, 0600)
-	if err != nil {
-		return err
-	}
-	l.bucket = f
-	l.n_bucket++
-	l.buffer.Reset()
-	return nil
-}
-
-func (l *LongBuffer) bucketPath(n int) string {
-	return path.Join(l.path, fmt.Sprintf("bucket_%d", n))
-}
-
-func (l *LongBuffer) write(chunk []byte) (int, error) {
-	_, err := l.buffer.Write(chunk)
-	if err != nil {
-		return 0, err
-	}
-	l.hash.Write(chunk)
-	l.len += len(chunk)
-	n, err := l.bucket.Write(chunk)
-	if n != len(chunk) {
-		return 0, fmt.Errorf("Wrong write %d != %d", n, len(chunk))
-	}
-	return n, err
 }
 
 func (l *LongBuffer) Len() int {
@@ -106,11 +69,6 @@ func (l *LongBuffer) Len() int {
 func (l *LongBuffer) Close() error {
 	l.lock.Lock()
 	defer l.lock.Unlock()
-	err := l.bucket.Chmod(0400)
-	if err != nil {
-		return err
-	}
-	l.buffer = nil
 	l.closed = true
 	return l.bucket.Close()
 }
@@ -127,98 +85,7 @@ func (l *LongBuffer) Write(blob []byte) (int, error) {
 	if l.closed {
 		return 0, errors.New("Closed buffer")
 	}
-	slice := blob[:]
-	size := 0
-	for {
-		cSize := l.size - l.buffer.Len() // empty space in the buffer
-		if cSize == 0 {                  // buffer is full, lets add a new one
-			err := l.newBucket()
-			if err != nil {
-				return size, err
-			}
-			cSize = l.size
-		}
-		if len(slice) < cSize { // there is enough space
-			n, err := l.write(slice)
-			if err != nil {
-				return size + n, err
-			}
-			return size + n, nil
-		}
-		n, err := l.write(slice[:cSize])
-		if err != nil {
-			return size + n, err
-		}
-		slice = slice[cSize:]
-		size += cSize
-	}
-	return 0, nil // the return is not here
-}
-
-type LongBufferReader struct {
-	l    *LongBuffer
-	seek int
-}
-
-func div(x, y int) int {
-	if x < y { // Early optimization
-		return 0
-	}
-	return int(math.Floor(float64(x) / float64(y)))
-}
-
-func (r *LongBufferReader) Read(p []byte) (n int, err error) {
-	r.l.lock.RLock()
-	defer r.l.lock.RUnlock()
-	if r.seek > r.l.len {
-		if r.l.closed {
-			return 0, fmt.Errorf("outside %d %d", r.seek, r.l.len)
-		}
-		time.Sleep(100 * time.Millisecond)
-		return 0, nil
-	}
-	if r.l.closed && r.seek == r.l.len {
-		return 0, io.EOF
-	}
-	bucket := div(r.seek, r.l.size)
-	fmt.Println("seek", r.seek, "bucket", bucket, "/", r.l.n_bucket, r.seek-bucket*r.l.size)
-	//if !r.l.closed && bucket+1 == r.l.n_bucket {
-	if bucket == r.l.n_bucket {
-		n = copy(r.l.buffer.Bytes()[r.seek-bucket*r.l.size:], p)
-		fmt.Println("from cache", n)
-		r.seek += n
-		return n, nil
-	}
-	f, err := os.Open(r.l.bucketPath(bucket))
-	if err != nil {
-		return n, err
-	}
-	defer f.Close()
-	_, err = f.Seek(int64(r.seek-bucket*r.l.size), io.SeekStart)
-	if err != nil {
-		return n, err
-	}
-	// FIXME, open/seek/close for each step is violent, add some lazyness
-	n, err = f.Read(p)
-	if err == io.EOF {
-		err = nil // And we don't care!
-	}
-	if n == 0 {
-		fmt.Println("Waiting")
-		time.Sleep(100 * time.Millisecond)
-	}
-
-	r.seek += n
+	n, err := l.writer.Write(blob)
+	l.len += n
 	return n, err
-}
-
-func (r *LongBufferReader) Close() error {
-	return nil
-}
-
-func (l *LongBuffer) Reader(seek int) io.ReadCloser {
-	return &LongBufferReader{
-		l:    l,
-		seek: seek,
-	}
 }
