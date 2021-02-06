@@ -2,16 +2,24 @@ package stream
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"errors"
 	"fmt"
+	"hash"
 	"io"
+	"math"
 	"os"
 	"path"
+	_path "path"
 	"sync"
 	"time"
+
+	"github.com/google/uuid"
 )
 
+// Bucket handle one writer, multiple slow reader
 type Bucket struct {
+	id     uuid.UUID
 	n      int
 	file   *os.File
 	buffer *bytes.Buffer
@@ -19,23 +27,38 @@ type Bucket struct {
 	size   int
 	closed bool
 	lock   *sync.RWMutex
+	hash   hash.Hash
 }
 
+// NewBucket returns a new Bucket, with its home and size
 func NewBucket(home string, size int) (*Bucket, error) {
+	id := uuid.New()
+	path := _path.Join(home, fmt.Sprintf("lb-%s", id.String()))
+	err := os.Mkdir(path, 0700)
+	if err != nil {
+		return nil, err
+	}
 	b := &Bucket{
 		n:      0,
 		buffer: bytes.NewBuffer(nil),
-		home:   home,
+		home:   path,
 		size:   size,
 		lock:   &sync.RWMutex{},
+		hash:   sha256.New(),
 	}
 	b.buffer.Grow(size)
-	err := b.reset()
+	err = b.reset()
 	return b, err
 }
 
-func BucketPath(home string, n int) string {
-	return path.Join(home, fmt.Sprintf("bucket_%d", n))
+// ID is the UUID
+func (b *Bucket) ID() uuid.UUID {
+	return b.id
+}
+
+// Path says where the storage folder is
+func (b *Bucket) Path() string {
+	return b.home
 }
 
 func (b *Bucket) reset() error {
@@ -88,14 +111,13 @@ func (b *Bucket) maxChunkSize() int {
 
 func (b *Bucket) write(chunk []byte) (int, error) {
 	// assert len(chunk) <= maxChinkSize
-	return io.MultiWriter(b.file, b.buffer).Write(chunk)
+	return io.MultiWriter(b.file, b.buffer, b.hash).Write(chunk)
 }
 
-func min(a, b int) int {
-	if a > b {
-		return b
-	}
-	return a
+func (b *Bucket) Hash() []byte {
+	b.lock.RLock()
+	defer b.lock.RUnlock()
+	return b.hash.Sum(nil)
 }
 
 func (b *Bucket) Write(bite []byte) (int, error) {
@@ -132,6 +154,10 @@ func (b *Bucket) Close() error {
 	b.buffer = nil // free some RAM
 	b.closed = true
 	return b.file.Close()
+}
+
+func (b *Bucket) Closed() bool {
+	return b.closed
 }
 
 // Cache return a copy of the last bucket buffer
@@ -210,4 +236,22 @@ func (b *Bucket) Copy(start int, w io.Writer) error {
 		}
 		start += n
 	}
+}
+
+func BucketPath(home string, n int) string {
+	return path.Join(home, fmt.Sprintf("bucket_%d", n))
+}
+
+func min(a, b int) int {
+	if a > b {
+		return b
+	}
+	return a
+}
+
+func div(x, y int) int {
+	if x < y { // Early optimization
+		return 0
+	}
+	return int(math.Floor(float64(x) / float64(y)))
 }
