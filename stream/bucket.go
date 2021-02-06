@@ -243,7 +243,7 @@ func (b *Bucket) Copy(start int, w io.Writer) error {
 		}
 		if n == 0 {
 			fmt.Println("Waiting for data")
-			time.Sleep(50 * time.Millisecond)
+			time.Sleep(100 * time.Millisecond)
 		}
 		start += n
 	}
