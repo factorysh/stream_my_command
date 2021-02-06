@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path"
+	"sync"
 	"time"
 )
 
@@ -17,6 +18,7 @@ type Bucket struct {
 	home   string
 	size   int
 	closed bool
+	lock   *sync.RWMutex
 }
 
 func NewBucket(home string, size int) (*Bucket, error) {
@@ -25,6 +27,7 @@ func NewBucket(home string, size int) (*Bucket, error) {
 		buffer: bytes.NewBuffer(nil),
 		home:   home,
 		size:   size,
+		lock:   &sync.RWMutex{},
 	}
 	b.buffer.Grow(size)
 	err := b.reset()
@@ -36,6 +39,8 @@ func BucketPath(home string, n int) string {
 }
 
 func (b *Bucket) reset() error {
+	b.lock.Lock()
+	defer b.lock.Unlock()
 	b.n++
 	var err error
 	if b.file != nil {
@@ -58,6 +63,8 @@ func (b *Bucket) reset() error {
 }
 
 func (b *Bucket) Len() int {
+	b.lock.RLock()
+	defer b.lock.RUnlock()
 	return b.buffer.Len()
 }
 
@@ -84,8 +91,10 @@ func (b *Bucket) Write(bite []byte) (int, error) {
 	start := 0
 	lbite := len(bite)
 	for {
+		b.lock.Lock()
 		size := min(b.maxChunkSize(), lbite-start)
 		n, err := b.write(bite[start : start+size])
+		b.lock.Unlock()
 		if err != nil {
 			return n, err
 		}
@@ -99,6 +108,8 @@ func (b *Bucket) Write(bite []byte) (int, error) {
 }
 
 func (b *Bucket) Close() error {
+	b.lock.Lock()
+	defer b.lock.Unlock()
 	err := b.file.Chmod(0400)
 	if err != nil {
 		return err
@@ -109,10 +120,15 @@ func (b *Bucket) Close() error {
 }
 
 func (b *Bucket) Cache() []byte {
-	return b.buffer.Bytes()
+	b.lock.RLock()
+	defer b.lock.RUnlock()
+	bb := b.buffer.Bytes()
+	out := make([]byte, len(bb))
+	copy(out, bb)
+	return out
 }
 
-func (b *Bucket) seekMyWriter(seek int, w io.Writer) (int, error) {
+func (b *Bucket) seekMyCopy(seek int, w io.Writer) (int, error) {
 	bucket := div(seek, b.size) + 1
 	if bucket > b.n {
 		if b.closed {
@@ -164,7 +180,7 @@ func (b *Bucket) seekMyWriter(seek int, w io.Writer) (int, error) {
 
 func (b *Bucket) Copy(start int, w io.Writer) error {
 	for {
-		n, err := b.seekMyWriter(start, w)
+		n, err := b.seekMyCopy(start, w)
 		if err == io.EOF {
 			return nil
 		}
