@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"strconv"
@@ -39,8 +38,8 @@ func Register(server *http.ServeMux, command Command) error {
 }
 
 type Run struct {
-	LongBuffer *stream.LongBuffer
-	Cancel     context.CancelFunc
+	Bucket *stream.Bucket
+	Cancel context.CancelFunc
 }
 
 func simpleStartRange(rangeRaw string) (int, error) {
@@ -78,7 +77,6 @@ func (c *Command) Handler() (http.HandlerFunc, error) {
 		}
 		fmt.Println("zargs", zargs)
 		k := strings.Join(zargs, "/")
-		var reader io.ReadCloser
 		seek := 0
 		rangeRaw := r.Header.Get("range")
 		if rangeRaw != "" {
@@ -96,18 +94,17 @@ func (c *Command) Handler() (http.HandlerFunc, error) {
 				lock.Unlock()
 				return
 			}
-			longBuffer, err := stream.NewLongBuffer(os.TempDir())
+			longBuffer, err := stream.NewBucket(os.TempDir(), 10*1024*1024)
 			if err != nil {
 				fmt.Println("error", err)
 				w.WriteHeader(500)
 				return
 			}
 			run = &Run{
-				LongBuffer: longBuffer,
+				Bucket: longBuffer,
 			}
 			buffers[k] = run
 			lock.Unlock()
-			reader = longBuffer.Reader(seek)
 			var ctx context.Context
 			ctx, run.Cancel = context.WithCancel(context.TODO())
 			w.Header().Set("Stream-Status", "fresh")
@@ -119,7 +116,7 @@ func (c *Command) Handler() (http.HandlerFunc, error) {
 			lock.Unlock()
 			if r.Method == "DELETE" {
 				run.Cancel()
-				w.Header().Set("X-Id", run.LongBuffer.ID().String())
+				w.Header().Set("X-Id", run.Bucket.ID().String())
 				w.WriteHeader(200)
 				return
 			}
@@ -127,19 +124,18 @@ func (c *Command) Handler() (http.HandlerFunc, error) {
 				w.WriteHeader(http.StatusMethodNotAllowed)
 				return
 			}
-			if run.LongBuffer.Closed() {
-				w.Header().Set("Content-Length", fmt.Sprintf("%d", run.LongBuffer.Len()-seek))
-				w.Header().Set("etag", hex.EncodeToString(run.LongBuffer.Hash()))
+			if run.Bucket.Closed() {
+				w.Header().Set("Content-Length", fmt.Sprintf("%d", run.Bucket.Len()-seek))
+				w.Header().Set("etag", hex.EncodeToString(run.Bucket.Hash()))
 			}
 			w.Header().Set("Stream-Status", "refurbished")
-			reader = run.LongBuffer.Reader(seek)
 		}
 		w.Header().Set("Content-Type", c.ContentType)
 		w.Header().Set("Accept-Range", "bytes")
-		w.Header().Set("X-Id", run.LongBuffer.ID().String())
+		w.Header().Set("X-Id", run.Bucket.ID().String())
 		if f, ok := w.(http.Flusher); ok {
 			f.Flush()
 		}
-		io.Copy(w, reader)
+		run.Bucket.Copy(seek, w)
 	}, nil
 }
