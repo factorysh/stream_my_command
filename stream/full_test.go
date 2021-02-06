@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"fmt"
-	"io"
 	"math/rand"
 	"os"
 	"sync"
@@ -15,7 +14,7 @@ import (
 )
 
 func TestSimple(t *testing.T) {
-	l, err := NewLongBuffer(os.TempDir())
+	l, err := NewBucket(os.TempDir(), 10*1024*1024)
 	assert.NoError(t, err)
 	assert.NotEmpty(t, l.ID())
 
@@ -44,19 +43,18 @@ func TestSimple(t *testing.T) {
 	err = l.Close()
 	assert.NoError(t, err)
 	assert.True(t, l.Closed())
-	reader := l.Reader(0)
-	b := new(bytes.Buffer)
-	n, err := io.Copy(b, reader)
+	out := bytes.NewBuffer(nil)
+	err = l.Copy(0, out)
 	assert.NoError(t, err)
-	fmt.Println("path", l.path)
-	assert.Equal(t, int64(30*1024*1024+512), n)
+	fmt.Println("path", l.Path())
+	assert.Equal(t, 30*1024*1024+512, out.Len())
 	h2 := sha256.New()
-	h2.Write(b.Bytes())
+	h2.Write(out.Bytes())
 	assert.Equal(t, h1.Sum(nil), l.Hash())
 }
 
 func TestReadWhileWrite(t *testing.T) {
-	l, err := NewLongBuffer(os.TempDir())
+	l, err := NewBucket(os.TempDir(), 10*1024*1024)
 	assert.NoError(t, err)
 
 	r := rand.New(rand.NewSource(time.Now().Unix()))
@@ -77,12 +75,11 @@ func TestReadWhileWrite(t *testing.T) {
 	for i := 0; i < 1; i++ {
 		wg.Add(1)
 		go func() {
-			reader := l.Reader(0)
-			b := new(bytes.Buffer)
-			n, err := io.Copy(b, reader)
+			b := bytes.NewBuffer(nil)
+			err = l.Copy(0, b)
 			assert.NoError(t, err)
-			fmt.Println("path", l.path)
-			assert.Equal(t, int64(30*1024*1024+512), n)
+			fmt.Println("path", l.Path())
+			assert.Equal(t, 30*1024*1024+512, b.Len())
 			h2 := sha256.New()
 			h2.Write(b.Bytes())
 			assert.Equal(t, h1.Sum(nil), l.Hash())
@@ -118,19 +115,28 @@ func TestReadWhileWrite(t *testing.T) {
 	wg.Wait()
 
 	// Read a finished lb
-	reader := l.Reader(0)
-	b := new(bytes.Buffer)
-	n, err := io.Copy(b, reader)
+	b := bytes.NewBuffer(nil)
+	err = l.Copy(0, b)
 	assert.NoError(t, err)
-	fmt.Println("path", l.path)
-	assert.Equal(t, int64(30*1024*1024+512), n)
+	fmt.Println("path", l.Path())
+	assert.Equal(t, 30*1024*1024+512, b.Len())
 	h2 := sha256.New()
 	h2.Write(b.Bytes())
 	assert.Equal(t, h1.Sum(nil), l.Hash())
 }
 
+type SlowWriter struct {
+	b *bytes.Buffer
+}
+
+func (s *SlowWriter) Write(b []byte) (int, error) {
+	r := rand.New(rand.NewSource(time.Now().Unix()))
+	time.Sleep(time.Duration(r.Int63n(30)) * time.Millisecond)
+	return s.b.Write(b)
+}
+
 func TestLongBuffer(t *testing.T) {
-	l, err := NewLongBuffer(os.TempDir())
+	l, err := NewBucket(os.TempDir(), 10*1024*1024)
 	assert.NoError(t, err)
 
 	r := rand.New(rand.NewSource(time.Now().Unix()))
@@ -139,35 +145,20 @@ func TestLongBuffer(t *testing.T) {
 
 	h3 := sha256.New()
 	go func() { // Slow reader
-		reader := l.Reader(0)
-		b := new(bytes.Buffer)
-		n := 0
-		chunk := make([]byte, 512*1024)
-		for {
-			i, err := reader.Read(chunk)
-			n += i
-			if err == io.EOF {
-				break
-			}
-			if err != nil {
-				panic(err)
-			}
-			b.Write(chunk[:i])
-			time.Sleep(time.Duration(r.Int63n(30)) * time.Millisecond)
-		}
+		b := &SlowWriter{bytes.NewBuffer(nil)}
+		err = l.Copy(0, b)
 		assert.NoError(t, err)
-		assert.Equal(t, 30*1024*1024, n)
-		h3.Write(b.Bytes())
+		assert.Equal(t, 30*1024*1024, b.b.Len())
+		h3.Write(b.b.Bytes())
 		wg.Done()
 	}()
 
 	h4 := sha256.New()
 	go func() {
-		reader := l.Reader(0)
-		b := new(bytes.Buffer)
-		n, err := io.Copy(b, reader)
+		b := bytes.NewBuffer(nil)
+		err = l.Copy(0, b)
 		assert.NoError(t, err)
-		assert.Equal(t, int64(30*1024*1024), n)
+		assert.Equal(t, 30*1024*1024, b.Len())
 		h4.Write(b.Bytes())
 		wg.Done()
 	}()
@@ -189,12 +180,11 @@ func TestLongBuffer(t *testing.T) {
 
 	wg.Wait()
 
-	reader := l.Reader(0)
-	b := new(bytes.Buffer)
-	n, err := io.Copy(b, reader)
+	b := bytes.NewBuffer(nil)
+	err = l.Copy(0, b)
 	assert.NoError(t, err)
-	fmt.Println("path", l.path)
-	assert.Equal(t, int64(30*1024*1024), n)
+	fmt.Println("path", l.Path())
+	assert.Equal(t, 30*1024*1024, b.Len())
 	h2 := sha256.New()
 	h2.Write(b.Bytes())
 	assert.Equal(t, l.Hash(), h1.Sum(nil))
@@ -204,11 +194,11 @@ func TestLongBuffer(t *testing.T) {
 }
 
 func TestSeek(t *testing.T) {
-	l, err := NewLongBuffer(os.TempDir())
+	l, err := NewBucket(os.TempDir(), 10*1024*1024)
 	assert.NoError(t, err)
 	r := rand.New(rand.NewSource(time.Now().Unix()))
 	buff := make([]byte, 3*1024*1024)
-	start := new(bytes.Buffer)
+	start := bytes.NewBuffer(nil)
 	SEEK := 5 * 1024 * 1024
 	for i := 0; i < 10; i++ {
 		_, _ = r.Read(buff)
@@ -223,16 +213,13 @@ func TestSeek(t *testing.T) {
 	}
 	assert.Equal(t, 30*1024*1024, l.Len())
 	l.Close()
-	reader := l.Reader(SEEK)
-	defer reader.Close()
 
 	h := sha256.New()
-	n, err := h.Write(start.Bytes()[:SEEK])
+	n, err := h.Write(start.Bytes()[:SEEK]) // writing the first bite
 	assert.NoError(t, err)
 	assert.Equal(t, n, SEEK)
-	w, err := io.Copy(h, reader)
+	err = l.Copy(SEEK, h) // writing the last bite
 	assert.NoError(t, err)
-	assert.Equal(t, w, int64(l.Len()-SEEK))
 	assert.Equal(t, l.Hash(), h.Sum(nil))
 
 }
