@@ -62,7 +62,21 @@ func (b *Bucket) reset() error {
 	return nil
 }
 
+// Len length of all buckets
 func (b *Bucket) Len() int {
+	b.lock.RLock()
+	defer b.lock.RUnlock()
+	if b.closed {
+		s, err := os.Stat(BucketPath(b.home, b.n))
+		if err != nil {
+			panic(err)
+		}
+		return ((b.n - 1) * b.size) + int(s.Size())
+	}
+	return ((b.n - 1) * b.size) + b.buffer.Len()
+}
+
+func (b *Bucket) lastBucketLen() int {
 	b.lock.RLock()
 	defer b.lock.RUnlock()
 	return b.buffer.Len()
@@ -107,6 +121,7 @@ func (b *Bucket) Write(bite []byte) (int, error) {
 	return start, nil
 }
 
+// Close the bucket
 func (b *Bucket) Close() error {
 	b.lock.Lock()
 	defer b.lock.Unlock()
@@ -119,6 +134,7 @@ func (b *Bucket) Close() error {
 	return b.file.Close()
 }
 
+// Cache return a copy of the last bucket buffer
 func (b *Bucket) Cache() []byte {
 	b.lock.RLock()
 	defer b.lock.RUnlock()
@@ -178,6 +194,7 @@ func (b *Bucket) seekMyCopy(seek int, w io.Writer) (int, error) {
 	}
 }
 
+// Copy content of the bucket to a writer, waiting for fresh data
 func (b *Bucket) Copy(start int, w io.Writer) error {
 	for {
 		n, err := b.seekMyCopy(start, w)

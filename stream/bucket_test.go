@@ -23,10 +23,12 @@ func TestBucket(t *testing.T) {
 	nBuckets := 4
 	assert.Equal(t, nBuckets, b.n)
 	assert.Equal(t, b.Cache(), txt[(nBuckets-1)*bucketSize:])
+	assert.Equal(t, 21, b.Len())
 	err = b.Close()
 	assert.NoError(t, err)
 	buff := bytes.NewBuffer(nil)
 	err = b.Copy(0, buff)
 	assert.NoError(t, err)
 	assert.Equal(t, txt, buff.Bytes())
+	assert.Equal(t, 21, b.Len())
 }
