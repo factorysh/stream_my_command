@@ -39,6 +39,7 @@ func NewBucket(home string, size int) (*Bucket, error) {
 		return nil, err
 	}
 	b := &Bucket{
+		id:     id,
 		n:      0,
 		buffer: bytes.NewBuffer(nil),
 		home:   path,
