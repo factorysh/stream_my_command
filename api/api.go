@@ -127,12 +127,26 @@ func (c *Command) Handler() (http.HandlerFunc, error) {
 			if run.Bucket.Closed() {
 				w.Header().Set("Content-Length", fmt.Sprintf("%d", run.Bucket.Len()-seek))
 				w.Header().Set("etag", hex.EncodeToString(run.Bucket.Hash()))
+				if seek > 0 {
+					w.Header().Add("Content-Range",
+						fmt.Sprintf("bytes %d-%d/%d",
+							seek,
+							run.Bucket.Len()-1,
+							run.Bucket.Len()))
+				}
+			} else {
+				if seek > 0 {
+					w.Header().Add("Content-Range", fmt.Sprintf("bytes %d/*", seek))
+				}
 			}
 			w.Header().Set("Stream-Status", "refurbished")
 		}
 		w.Header().Set("Content-Type", c.ContentType)
-		w.Header().Set("Accept-Range", "bytes")
+		w.Header().Set("Accept-Ranges", "bytes")
 		w.Header().Set("X-Id", run.Bucket.ID().String())
+		if seek > 0 {
+			w.WriteHeader(206) // Partial content
+		}
 		if f, ok := w.(http.Flusher); ok {
 			f.Flush()
 		}
