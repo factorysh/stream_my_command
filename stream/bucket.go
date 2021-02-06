@@ -161,29 +161,40 @@ func (b *Bucket) Closed() bool {
 }
 
 // Cache return a copy of the last bucket buffer
-func (b *Bucket) Cache() []byte {
+func (b *Bucket) Cache(start int) []byte {
 	b.lock.RLock()
 	defer b.lock.RUnlock()
 	bb := b.buffer.Bytes()
-	out := make([]byte, len(bb))
-	copy(out, bb)
+	if start > len(bb) {
+		return []byte{}
+	}
+	out := make([]byte, len(bb)-start)
+	copy(out, bb[start:])
 	return out
 }
 
 func (b *Bucket) seekMyCopy(seek int, w io.Writer) (int, error) {
-	bucket := div(seek, b.size) + 1
-	if bucket > b.n {
+	nBucket := b.n
+	d := div(seek, b.size)
+	rest := seek - (d * b.size)
+	bucket := d + 1
+	if d == nBucket && rest == 0 && b.closed { // nothing else to do
+		return 0, io.EOF
+	}
+	if d >= nBucket {
 		if b.closed {
-			return 0, fmt.Errorf("Bucket overflow %d/%d", bucket, b.n)
+			return 0, fmt.Errorf("Bucket overflow %d/%d : %d",
+				bucket, nBucket, rest)
 		}
 		return 0, nil
 	}
 	start := seek - ((bucket - 1) * b.size)
-	if !b.closed && bucket == b.n {
-		if start > b.buffer.Len() {
+	if !b.closed && bucket == nBucket {
+		cached := b.Cache(start)
+		if len(cached) == 0 {
 			return 0, nil
 		}
-		return w.Write(b.Cache()[start:])
+		return w.Write(cached)
 	}
 	path := BucketPath(b.home, bucket)
 	f, err := os.OpenFile(path, os.O_RDONLY, 0400)
@@ -199,7 +210,7 @@ func (b *Bucket) seekMyCopy(seek int, w io.Writer) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	if bucket == b.n && int(s.Size()) == start {
+	if bucket == nBucket && int(s.Size()) == start {
 		return 0, io.EOF
 	}
 	size := 0

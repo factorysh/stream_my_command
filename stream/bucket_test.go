@@ -22,7 +22,7 @@ func TestBucket(t *testing.T) {
 	assert.NoError(t, err)
 	nBuckets := 4
 	assert.Equal(t, nBuckets, b.n)
-	assert.Equal(t, b.Cache(), txt[(nBuckets-1)*bucketSize:])
+	assert.Equal(t, b.Cache(0), txt[(nBuckets-1)*bucketSize:])
 	assert.Equal(t, 21, b.Len())
 	err = b.Close()
 	assert.NoError(t, err)
