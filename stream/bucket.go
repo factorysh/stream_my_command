@@ -7,12 +7,9 @@ import (
 	"fmt"
 	"hash"
 	"io"
-	"math"
 	"os"
-	"path"
 	_path "path"
 	"sync"
-	"time"
 
 	"github.com/google/uuid"
 )
@@ -115,12 +112,14 @@ func (b *Bucket) write(chunk []byte) (int, error) {
 	return io.MultiWriter(b.file, b.buffer, b.hash).Write(chunk)
 }
 
+// Hash is the SHA256 of written datas
 func (b *Bucket) Hash() []byte {
 	b.lock.RLock()
 	defer b.lock.RUnlock()
 	return b.hash.Sum(nil)
 }
 
+// Write a bite
 func (b *Bucket) Write(bite []byte) (int, error) {
 	if b.closed {
 		return 0, errors.New("Closed bucket")
@@ -139,7 +138,10 @@ func (b *Bucket) Write(bite []byte) (int, error) {
 		if start == lbite {
 			break
 		}
-		b.reset()
+		err = b.reset()
+		if err != nil {
+			return n, err
+		}
 	}
 	return start, nil
 }
@@ -172,98 +174,4 @@ func (b *Bucket) Cache(start int) []byte {
 	out := make([]byte, len(bb)-start)
 	copy(out, bb[start:])
 	return out
-}
-
-func (b *Bucket) seekMyCopy(seek int, w io.Writer) (int, error) {
-	nBucket := b.n
-	d := div(seek, b.size)
-	rest := seek - (d * b.size)
-	bucket := d + 1
-	if d == nBucket && rest == 0 && b.closed { // nothing else to do
-		return 0, io.EOF
-	}
-	if d >= nBucket {
-		if b.closed {
-			return 0, fmt.Errorf("Bucket overflow %d/%d : %d",
-				bucket, nBucket, rest)
-		}
-		return 0, nil
-	}
-	start := seek - ((bucket - 1) * b.size)
-	if !b.closed && bucket == nBucket {
-		cached := b.Cache(start)
-		if len(cached) == 0 {
-			return 0, nil
-		}
-		return w.Write(cached)
-	}
-	path := BucketPath(b.home, bucket)
-	f, err := os.OpenFile(path, os.O_RDONLY, 0400)
-	if err != nil {
-		return 0, err
-	}
-	defer f.Close()
-	s, err := f.Stat()
-	if err != nil {
-		return 0, err
-	}
-	_, err = f.Seek(int64(start), io.SeekStart)
-	if err != nil {
-		return 0, err
-	}
-	if bucket == nBucket && int(s.Size()) == start {
-		return 0, io.EOF
-	}
-	size := 0
-	for {
-		p := make([]byte, int(s.Size())-start-size)
-		n, err := f.Read(p)
-		if err != nil {
-			return size, err
-		}
-		_, err = w.Write(p)
-		if err != nil {
-			return size, err
-		}
-		size += n
-		if int(s.Size()) == start+size {
-			return size, nil
-		}
-	}
-}
-
-// Copy content of the bucket to a writer, waiting for fresh data
-func (b *Bucket) Copy(start int, w io.Writer) error {
-	for {
-		n, err := b.seekMyCopy(start, w)
-		if err == io.EOF {
-			return nil
-		}
-		if err != nil {
-			return err
-		}
-		if n == 0 {
-			fmt.Println("Waiting for data")
-			time.Sleep(100 * time.Millisecond)
-		}
-		start += n
-	}
-}
-
-func BucketPath(home string, n int) string {
-	return path.Join(home, fmt.Sprintf("bucket_%d", n))
-}
-
-func min(a, b int) int {
-	if a > b {
-		return b
-	}
-	return a
-}
-
-func div(x, y int) int {
-	if x < y { // Early optimization
-		return 0
-	}
-	return int(math.Floor(float64(x) / float64(y)))
 }
