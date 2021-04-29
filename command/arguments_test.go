@@ -7,9 +7,9 @@ import (
 )
 
 func TestArguments(t *testing.T) {
-	a, err := NewArguments([]string{"pim", "$1", "poum"})
+	a, err := NewArguments("pim", "$1", "poum")
 	assert.NoError(t, err)
-	v, err := a.Values([]string{"pam"})
+	v, err := a.Values("pam")
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"pim", "pam", "poum"}, v)
 }

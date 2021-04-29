@@ -59,7 +59,7 @@ func simpleStartRange(rangeRaw string) (int, error) {
 
 func (c *Command) Handler() (http.HandlerFunc, error) {
 	pool := _command.NewPool()
-	arguments, err := _command.NewArguments(c.Arguments)
+	arguments, err := _command.NewArguments(c.Arguments...)
 	if err != nil {
 		return nil, err
 	}
@@ -69,7 +69,7 @@ func (c *Command) Handler() (http.HandlerFunc, error) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		slugs := strings.Split(r.URL.Path, "/")
 		fmt.Println("slugs", slugs)
-		zargs, err := arguments.Values(slugs[4:])
+		zargs, err := arguments.Values(slugs[4:]...)
 		if err != nil {
 			fmt.Println("error", err)
 			w.WriteHeader(400)
