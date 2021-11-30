@@ -5,7 +5,8 @@ test:
 	go test -v -timeout 30s \
 		github.com/factorysh/stream_my_command/rfc7233 \
 		github.com/factorysh/stream_my_command/command \
-		github.com/factorysh/stream_my_command/stream
+		github.com/factorysh/stream_my_command/stream \
+		github.com/factorysh/stream_my_command/todo
 
 bin:
 	mkdir -p bin
